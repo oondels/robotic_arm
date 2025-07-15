@@ -1,8 +1,3 @@
-// Initial points in a triangle
-const A = [0, 0]; // -> Fixo
-let B = [0, 10]; // -> Variavel
-let C = [10, 10]; // -> Variavel
-
 const lawOfCosines = (a, b, c, angle, side) => {
   // convert degrees → radians
   const θ = angle * Math.PI / 180;
@@ -85,21 +80,8 @@ class Joint {
     return [this.x, this.y, this.z]
   }
 
-  // Atualiza angulo do motor e recalcula e atualiza coordenadas no mapa se a junta for móvel no plano
   updateAngle(newAngle) {
-    this.angle = newAngle
-    if (this.movel) {
-      // atualizar posicao no mapa
-      // 
-    }
-  }
-
-  updateCoordinates(x, y, z = this.z) {
-    if (this.movel) {
-      this.x = x;
-      this.y = y;
-      this.z = z;
-    }
+    this.angle += newAngle
   }
 }
 
@@ -135,11 +117,11 @@ class RoboticArm {
 
   updateArmGeometry() {
     //* Pontos / Joints
-    this.A = this.shoulderJoint.coordinates();
+    this.A = this.shoulderJoint.coordinates(); // -> Fixo
     this.B = this.elbowJoint.coordinates();
     this.C = this.clawJoint.coordinates();
     // Ponto de referencia para o Losango (Referencial do braco)
-    this.D = [10, 0]
+    this.D = [10, 0] // -> Fixo
 
     //* Vetores
     this.AB = [this.B[0] - this.A[0], this.B[1] - this.A[1]];
@@ -165,7 +147,7 @@ class RoboticArm {
     this.uAD = [this.AD[0] / this.moduloAD, this.AD[1] / this.moduloAD];
   }
 
-  updateCoordinates(x, y, z = this.z, joint) {
+  updateCoordinates(x, y, z, joint) {
     if (joint.movel) {
       joint.x = x;
       joint.y = y;
@@ -216,7 +198,7 @@ class RoboticArm {
     const sin = Math.sin(angle)
 
     // Retorna as novas coordenadas pós rotação apenas se a Joint for móvel no plano
-    return [x * cos - y * sin, x * sin - y * cos]
+    return [x * cos - y * sin, x * sin + y * cos]
   }
 
   // Formula ANtiga
@@ -232,6 +214,15 @@ class RoboticArm {
     const currentClaw = this.getClawDistance();
     const newClaw = currentClaw + distance;
 
+    // Verificar se o movimento é possível
+    // TODO: Atualizar limites
+    const maxReach = this.segmentLength1 + this.segmentLength2;
+    const minReach = Math.abs(this.segmentLength1 - this.segmentLength2);
+    if (newClaw > maxReach || newClaw < minReach) {
+      console.log(`Movimento impossível. Alcance deve estar entre ${minReach} e ${maxReach}`);
+      return;
+    }
+
     const newAC = Math.sqrt((height * height) + (newClaw * newClaw));
 
     // Atualiza novo angulo interno de A
@@ -242,14 +233,15 @@ class RoboticArm {
       throw new Error('Requested movement out of reach');
     }
 
+    const oldAngA = this.A_angle
+    const oldAngB = this.B_angle
     const newAngleA = Math.acos(cosA) * 180 / Math.PI;
+    // * OBS -> This just works with ideal rhombus (losango) onde os lados são iguais, em outros cenários será necessário usar lei dos cossenos
     const newAngleB = 180 - newAngleA
 
-    // * Calcula a variação do angulo nos motores apos a mudança de posição
-    const angleDeltaA = newAngleA - this.A_angle
-    const angleDeltaB = newAngleB - this.B_angle
-    this.shoulderJoint.updateAngle(angleDeltaA);
-    this.elbowJoint.updateAngle(angleDeltaB)
+    // * Calcula a variação do angulo nos motores apos a mudança de posição e atualiza movimento dos motores (Joints)
+    const angleDeltaA = newAngleA - oldAngA
+    const angleDeltaB = newAngleB - oldAngB
 
     //* Atualização dos angulos do Losango de acordo com a movimentação do braço
     this.A_angle = newAngleA;
@@ -265,24 +257,13 @@ class RoboticArm {
     const updatedHeight = this.calculateLosangoHeight();
     const updatedClaw = this.getClawDistance();
 
-    // Verificar se o movimento é possível
-    const maxReach = this.segmentLength1 + this.segmentLength2;
-    const minReach = Math.abs(this.segmentLength1 - this.segmentLength2);
-
-    if (updatedClaw > maxReach || updatedClaw < minReach) {
-      console.log(`Movimento impossível. Alcance deve estar entre ${minReach} e ${maxReach}`);
-      return;
-    }
+    // * Calcula a variação do angulo nos motores apos a mudança de posição e atualiza movimento dos motores (Joints)
+    this.shoulderJoint.updateAngle(angleDeltaA);
+    this.elbowJoint.updateAngle(angleDeltaB)
 
     //* Rotaciona o segmento AB em relação a AD
     //* calcular AB girando AD em +angleA (padrão CCW).
-    const new_AB = this.rotateVector(this.uAD, toRad(shoulderAngleDegrees)).map(c => c * this.segmentLength1)
-
-    //* Atualiza os ângulos das Joints
-    // ! Corrigir!!
-    // TODO: O correto é atualizar a angulação do motor da Joint e atualizar o angulo de referencia do Losango (representação do braço em coordenadas) -> Para manter os cálculos e resultados consistentes
-    this.shoulderJoint.updateAngle(shoulderAngleDegrees)
-    this.elbowJoint.updateAngle(elbowAngleDegrees);
+    const new_AB = this.rotateVector(this.uAD, toRad(newAngleA)).map(c => c * this.segmentLength1)
 
     //* Calcular novas posições das Joints no plano cartesiano (Coordenadas)
     const elbowX = this.A[0] + new_AB[0]
@@ -290,12 +271,12 @@ class RoboticArm {
     const elbowZ = 0 // Disabled for now...
 
     const clawX = elbowX + (this.D[0] - this.A[0])
-    const clawY = elbowX + (this.D[1] - this.A[1])
+    const clawY = elbowY + (this.D[1] - this.A[1])
     const clawZ = 0 // Disabled for now...
 
     //* Atualiza coordenadas das Joints móveis
-    this.elbowJoint.updateCoordinates(elbowX, elbowY, elbowZ);
-    this.clawJoint.updateCoordinates(clawX, clawY, clawZ);
+    this.updateCoordinates(elbowX, elbowY, elbowZ, this.elbowJoint)
+    this.updateCoordinates(clawX, clawY, clawZ, this.clawJoint)
 
     // Atualizar geometria do braço
     this.updateArmGeometry();
@@ -348,14 +329,16 @@ function displayArmStatus() {
   console.log("=".repeat(50));
 
   console.log("\n🔧 ÂNGULOS Das Juntas:");
-  console.log(`  Ombro: ${arm1.shoulderJoint.getAngle().toFixed(2)}°`);
-  console.log(`  Cotovelo: ${arm1.elbowJoint.getAngle().toFixed(2)}°`);
-  console.log(`  Garra: ${arm1.clawJoint.getAngle().toFixed(2)}°`);
+  console.log(`  Ombro: ${arm1.A_angle.toFixed(2)}°`);
+  console.log(`  Cotovelo: ${arm1.B_angle.toFixed(2)}°`);
 
   console.log("\n📏 COMPRIMENTOS:");
   console.log(`  Lado a (BC): ${arm1.a.toFixed(2)}`);
   console.log(`  Lado b (AC): ${arm1.b.toFixed(2)}`);
   console.log(`  Lado c (AB): ${arm1.c.toFixed(2)}`);
+
+  console.log(`Claw Distance: ${arm1.getClawDistance()}`);
+  
 
   console.log("\n📍 COORDENADAS:");
   const coords = arm1.coordinates();
@@ -374,26 +357,25 @@ function displayArmStatus() {
 async function startInteractiveMode() {
   console.log("🤖 CONTROLE INTERATIVO DO BRAÇO ROBÓTICO");
   console.log("Insira a distância para mover a garra (números positivos/negativos)");
-  console.log("Digite 'exit' para sair\n");
 
   // Mostrar status inicial
-  // displayArmStatus();
+  displayArmStatus();
 
   while (true) {
     try {
-      const input = await ask("\n💬 Digite a distância para mover a garra: ");
+      const input = await ask("\nDigite a distância para mover a garra: ");
 
       if (isNaN(input)) {
-        console.log("❌ Por favor, insira um número válido.");
+        console.log("Por favor, insira um número válido.");
         continue;
       }
 
-      console.log(`\n🚀 Movendo garra ${input > 0 ? input : input} unidades...`);
+      console.log(`\nMovendo garra ${input > 0 ? input : input} unidades...`);
 
       arm1.moveClawFront(input);
 
       console.log("✅ Movimento concluído!");
-      // displayArmStatus();
+      displayArmStatus();
 
     } catch (error) {
       console.log("❌ Erro:", error.message);
