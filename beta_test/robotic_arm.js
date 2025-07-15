@@ -113,47 +113,158 @@ class RoboticArm {
     this.elbowJoint = elbowJoint;
     this.clawJoint = clawJoint;
 
+    // Angulos Iniciais de cada vértice do Losango -> Inicia como um quadrado
+    // A = C, B = D, A + B = 180, C + D = 180
+    this.A_angle = 90
+    this.B_angle = 180 - this.A_angle
+    this.C_angle = this.A_angle
+    this.D_angle = this.B_angle
+
+    // // TODO: Verificar necessidade deste mapeamneto
+    // this.last_A_angle = this.A_angle
+    // this.last_B_angle = this.B_angle
+    // this.last_C_angle = this.C_angle
+    // this.last_D_angle = this.D_angle
+
     // Comprimentos fixos dos segmentos do braço
     this.segmentLength1 = 10; // Ombro para cotovelo
-    this.segmentLength2 = this.segmentLength1; // Cotovelo para garra
+    this.segmentLength2 = this.segmentLength1; // Cotovelo para Garra
 
     this.updateArmGeometry();
   }
 
   updateArmGeometry() {
+    //* Pontos / Joints
     this.A = this.shoulderJoint.coordinates();
     this.B = this.elbowJoint.coordinates();
     this.C = this.clawJoint.coordinates();
     // Ponto de referencia para o Losango (Referencial do braco)
     this.D = [10, 0]
 
+    //* Vetores
     this.AB = [this.B[0] - this.A[0], this.B[1] - this.A[1]];
     this.BC = [this.C[0] - this.B[0], this.C[1] - this.B[1]];
     this.AC = [this.C[0] - this.A[0], this.C[1] - this.A[1]];
     this.AD = [this.D[0] - this.A[0], this.D[1] - this.A[1]]
 
-    this.moduloAB = Math.sqrt(this.AB[0] ** 2 + this.AB[1] ** 2);
-    this.moduloBC = Math.sqrt(this.BC[0] ** 2 + this.BC[1] ** 2);
-    this.moduloAC = Math.sqrt(this.AC[0] ** 2 + this.AC[1] ** 2);
-    this.moduloAD = Math.sqrt(this.AD[0] ** 2 + this.AD[1] ** 2);
+    //* Módulo da Reta
+    this.moduloAB = Math.hypot(...this.AB);
+    this.moduloBC = Math.hypot(...this.BC);
+    this.moduloAC = Math.hypot(...this.AC);
+    this.moduloAD = Math.hypot(...this.AD);
 
     this.a = this.moduloBC; // Distância BC
     this.b = this.moduloAC; // Distância AC (distância da garra)
     this.c = this.moduloAB; // Distância AB
     this.d = this.moduloAD  // Referencia para formação do Losango
+
+    //* Direção unitária de cada vetor
+    this.uAB = [this.AB[0] / this.moduloAB, this.AB[1] / this.moduloAB];
+    this.uBC = [this.BC[0] / this.moduloBC, this.BC[1] / this.moduloBC];
+    this.uAC = [this.AC[0] / this.moduloAC, this.AC[1] / this.moduloAC];
+    this.uAD = [this.AD[0] / this.moduloAD, this.AD[1] / this.moduloAD];
+
+    //* Angulos representativos do Losando (Vértices A, B, C e D)
+    const shoulderAngleTest = calcAngleBasedClawDistance(this.segmentLength1, this.b)
+    console.log(`Angulo atualizado do shoulderAngle: ${shoulderAngleTest.toFixed(2)} para claw distance = ${this.b}`);
+
+  }
+
+  updateCoordinates(x, y, z = this.z, joint) {
+    if (joint.movel) {
+      joint.x = x;
+      joint.y = y;
+      joint.z = z;
+    }
+  }
+
+  /**
+   * Calcula a altura do losango (Garra) em relação ao solo
+   * @returns {number}
+ */
+  calculateLosangoHeight() {
+    // h=asin(A)
+    return this.segmentLength1 * Math.sin(toRad(this.A_angle))
+  }
+
+  /**
+    * Retorna a distancia da Garra em relação a origem levando em consideração a geometria
+    * que a mesma forma (triângulo) onde a distancia AC é a hipotenusa, a altura do losango é um dos catetos
+    * e o outro cateto é a distancia da garra.
+    * 
+    * Calcula a distância horizontal da perna do triângulo retângulo formado pela altura
+    * do losango e sua diagonal maior. Usa o teorema de Pitágoras:
+    * distanciaHorizontal = √(hipotenusa² − altura²)
+    *
+    * @returns {number}  
+    *   A distância horizontal (isto é, o outro cateto) correspondente à
+    *   diagonal maior dada (`this.b`) e a altura do losango
+    *   (como retornado por `this.calculateLosangoHeight()`)
+    * @throws {Error}  
+    *   Se o radicando calculado (this.b² − altura²) for negativo, indicando
+    *   medidas inconsistentes do losango.
+  */
+  getClawDistance() {
+    const height = this.calculateLosangoHeight();
+    const hypot = this.b;               // comprimento da diagonal maior AC
+    const radicand = hypot * hypot - height * height;
+    if (radicand < 0) {
+      throw new Error('Dimensões inconsistentes: não é possível calcular a distância horizontal');
+    }
+    return Math.sqrt(radicand);
+  }
+
+  rotateVector(vectorUn, angle) {
+    const [x, y] = vectorUn
+
+    const cos = Math.cos(angle)
+    const sin = Math.sin(angle)
+
+    // Retorna as novas coordenadas pós rotação apenas se a Joint for móvel no plano
+    return [x * cos - y * sin, x * sin - y * cos]
   }
 
   moveClawFront(distance) {
     console.log(`\nMovendo garra ${distance} unidades para frente...`);
     // Para mover para frente, deve-se alterar o valor da reta AC para o tamanho final do movimento
-    // Exemplo: mover garra dois cm para frente é resultado da trigonometria para calcular os angulos nas `Joints` Shoulder e Elbow
-    const newClawDistance = this.b + distance
+    // Exemplo: mover garra dois cm para frente é resultado da trigonometria para calcular os angulos nas `Joints` Shoulder e Elbow]
+    const height = this.calculateLosangoHeight();
+    const currentClaw = this.getClawDistance();
+    const newClaw = currentClaw + distance;
+
+    const newAC = Math.sqrt((height * height) + (newClaw * newClaw));
+
+    // Atualiza novo angulo interno de A
+    const a = this.segmentLength1;
+    const ratio = (newAC * newAC) / (a * a);
+    const cosA = (ratio - 2) / 2;
+    if (cosA < -1 || cosA > 1) {
+      throw new Error('Requested movement out of reach');
+    }
+
+    const newAngleA = Math.acos(cosA) * 180 / Math.PI;
+    this.A_angle = newAngleA;
+    console.log(`Old AC diagonal = ${this.b.toFixed(4)}`);
+
+    // New Diagonal distance -> this.b
+    this.b = newAC;
+
+    // Recalcula medidas
+    const updatedHeight = this.calculateLosangoHeight();
+    const updatedClaw = this.getClawDistance();
+
+    console.log(`Old claw distance = ${currentClaw.toFixed(4)}`);
+
+    console.log(`New AC diagonal = ${newAC.toFixed(4)}`);
+    console.log(`New internal angle A = ${newAngleA.toFixed(4)}°`);
+    console.log(`Updated height = ${updatedHeight.toFixed(4)}`);
+    console.log(`Updated claw distance = ${updatedClaw.toFixed(4)}`);
 
     // Verificar se o movimento é possível
     const maxReach = this.segmentLength1 + this.segmentLength2;
     const minReach = Math.abs(this.segmentLength1 - this.segmentLength2);
 
-    if (newClawDistance > maxReach || newClawDistance < minReach) {
+    if (updatedClaw > maxReach || updatedClaw < minReach) {
       console.log(`Movimento impossível. Alcance deve estar entre ${minReach} e ${maxReach}`);
       return;
     }
@@ -162,44 +273,54 @@ class RoboticArm {
     // Para um braço de dois segmentos, calculamos os ângulos internos do triângulo
     // Calculo com lei dos cossenos para achar novos angulos -> Ver mais informacoes na documentacao
     // p = a √(2 - 2 cos(B))
+    //* Recalcula a angulação dos angulos internos do Losango para recalcular o angulo de cada Joint (motor)
 
-
-    //* Recalcula a angulação dos motores (Joints) para atender ao movimento
     // Ângulo no cotovelo (interno do losango)
-    const shoulderAngleDegrees = calcAngleBasedClawDistance(this.segmentLength1, newClawDistance)
+    const shoulderAngleDegrees = calcAngleBasedClawDistance(this.segmentLength1, updatedClaw)
     // Ângulo no ombro (interno do losango)
-    const elbowAngleDegrees = calcAngleBasedClawDistance(this.segmentLength1, newClawDistance, true)
-    console.log(`Novo ângulo do ombro: ${shoulderAngleDegrees.toFixed(2)}°`);
-    console.log(`Novo ângulo do cotovelo: ${elbowAngleDegrees.toFixed(2)}°`);
+    const elbowAngleDegrees = calcAngleBasedClawDistance(this.segmentLength1, updatedClaw, true)
 
-    // Atualizar os ângulos das joints
-    this.shoulderJoint.updateAngle(shoulderAngleDegrees);
+    console.log(`Novo ângulo do vertice A (ombro): ${shoulderAngleDegrees.toFixed(2)}° para claw distance = ${updatedClaw}`);
+    console.log(`Novo ângulo do vertice B (cotovelo): ${elbowAngleDegrees.toFixed(2)}°`);
+
+    // * Calcula a variação do angulo apos a mudança de posição
+    //! Continuar daqui fazendo o calculo da variação do angulo apos o movimento, atualizando os angulos do braco (losango -> this.A_anlge etc...) e depois enviar a variação do angulo para cada Joint atualizar a posição e corresponder o movimento
+    const shoulderAngleVariation = this.A_angle - shoulderAngleDegrees
+    const elbowAngleVariation = this.B_angle - elbowAngleDegrees
+
+    //* Rotaciona o segmento AB em relação a AD
+    //* calcular AB girando AD em +angleA (padrão CCW).
+    const new_AB = this.rotateVector(this.uAD, toRad(shoulderAngleDegrees)).map(c => c * this.segmentLength1)
+
+    //* Atualiza os ângulos das Joints
+    // ! Corrigir!!
+    // TODO: O correto é atualizar a angulação do motor da Joint e atualizar o angulo de referencia do Losango (representação do braço em coordenadas) -> Para manter os cálculos e resultados consistentes
+    this.shoulderJoint.updateAngle(shoulderAngleDegrees)
     this.elbowJoint.updateAngle(elbowAngleDegrees);
 
-    return
-
     //* Calcular novas posições das Joints no plano cartesiano (Coordenadas)
-    // Cotovelo: posição baseada no ângulo do ombro
-    // const elbowX = this.shoulderJoint.x + this.segmentLength1 * Math.cos(shoulderAngleRad);
-    const elbowX = this.segmentLength1 * Math.cos(shoulderAngleRad);
-    // const elbowY = this.shoulderJoint.y + this.segmentLength1 * Math.sin(shoulderAngleRad);
-    const elbowY = this.segmentLength1 * Math.sin(shoulderAngleRad);
+    const elbowX = this.A[0] + new_AB[0]
+    const elbowY = this.A[1] + new_AB[1]
+    const elbowZ = 0 // Disabled for now...
 
-    // Garra: posição baseada na posição do cotovelo e ângulo do cotovelo
-    const clawAngleFromHorizontal = shoulderAngleRad + (Math.PI - elbowAngleRad);
-    const clawX = elbowX + this.segmentLength2 * Math.cos(clawAngleFromHorizontal);
-    const clawY = elbowY + this.segmentLength2 * Math.sin(clawAngleFromHorizontal);
+    const clawX = elbowX + (this.D[0] - this.A[0])
+    const clawY = elbowX + (this.D[1] - this.A[1])
+    const clawZ = 0 // Disabled for now...
 
-    // Atualizar coordenadas das joints móveis
-    this.elbowJoint.updateCoordinates(elbowX, elbowY);
-    this.clawJoint.updateCoordinates(clawX, clawY);
+    //* Atualiza coordenadas das Joints móveis
+    this.elbowJoint.updateCoordinates(elbowX, elbowY, elbowZ);
+    this.clawJoint.updateCoordinates(clawX, clawY, clawZ);
 
     // Atualizar geometria do braço
     this.updateArmGeometry();
+  }
 
-    console.log(`Nova posição do cotovelo: (${elbowX.toFixed(2)}, ${elbowY.toFixed(2)})`);
-    console.log(`Nova posição da garra: (${clawX.toFixed(2)}, ${clawY.toFixed(2)})`);
-    console.log(`Nova distância da garra: ${this.b.toFixed(2)}`);
+  coordinates() {
+    return {
+      shoulder: this.shoulderJoint.coordinates(),
+      elbow: this.elbowJoint.coordinates(),
+      claw: this.clawJoint.coordinates()
+    };
   }
 
   joints() {
@@ -219,8 +340,80 @@ class RoboticArm {
     console.log("Elbow Angle:", this.elbowJoint.getAngle());
     console.log("Claw Angle:", this.clawJoint.getAngle());
   }
+
+  directions() {
+    console.log("Unit direction AB:", this.uAB);
+    console.log("Unit direction BC:", this.uBC);
+    console.log("Unit direction AC:", this.uAC);
+    console.log("Unit direction AD:", this.uAD);
+  }
 }
 
-const arm1 = new RoboticArm(shoulder, elbow, claw)
-// arm1.angles()
-arm1.moveClawFront(4)
+const readline = require('readline');
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+function ask(prompt) {
+  return new Promise(res => rl.question(prompt, ans => res(parseFloat(ans))));
+}
+const arm1 = new RoboticArm(shoulder, elbow, claw);
+
+function displayArmStatus() {
+  console.log("=".repeat(50));
+  console.log("📊 STATUS DO BRAÇO ROBÓTICO");
+  console.log("=".repeat(50));
+
+  console.log("\n🔧 ÂNGULOS Das Juntas:");
+  console.log(`  Ombro: ${arm1.shoulderJoint.getAngle().toFixed(2)}°`);
+  console.log(`  Cotovelo: ${arm1.elbowJoint.getAngle().toFixed(2)}°`);
+  console.log(`  Garra: ${arm1.clawJoint.getAngle().toFixed(2)}°`);
+
+  console.log("\n📏 COMPRIMENTOS:");
+  console.log(`  Lado a (BC): ${arm1.a.toFixed(2)}`);
+  console.log(`  Lado b (AC): ${arm1.b.toFixed(2)}`);
+  console.log(`  Lado c (AB): ${arm1.c.toFixed(2)}`);
+
+  console.log("\n📍 COORDENADAS:");
+  const coords = arm1.coordinates();
+  console.log(`  Ombro: (${coords.shoulder[0].toFixed(2)}, ${coords.shoulder[1].toFixed(2)})`);
+  console.log(`  Cotovelo: (${coords.elbow[0].toFixed(2)}, ${coords.elbow[1].toFixed(2)})`);
+  console.log(`  Garra: (${coords.claw[0].toFixed(2)}, ${coords.claw[1].toFixed(2)})`);
+
+  console.log("\n🧭 DIREÇÕES UNITÁRIAS:");
+  console.log(`  AB: (${arm1.uAB[0].toFixed(3)}, ${arm1.uAB[1].toFixed(3)})`);
+  console.log(`  BC: (${arm1.uBC[0].toFixed(3)}, ${arm1.uBC[1].toFixed(3)})`);
+  console.log(`  AC: (${arm1.uAC[0].toFixed(3)}, ${arm1.uAC[1].toFixed(3)})`);
+
+  console.log("=".repeat(50));
+}
+
+async function startInteractiveMode() {
+  console.log("🤖 CONTROLE INTERATIVO DO BRAÇO ROBÓTICO");
+  console.log("Insira a distância para mover a garra (números positivos/negativos)");
+  console.log("Digite 'exit' para sair\n");
+
+  // Mostrar status inicial
+  // displayArmStatus();
+
+  while (true) {
+    try {
+      const input = await ask("\n💬 Digite a distância para mover a garra: ");
+
+      if (isNaN(input)) {
+        console.log("❌ Por favor, insira um número válido.");
+        continue;
+      }
+
+      console.log(`\n🚀 Movendo garra ${input > 0 ? input : input} unidades...`);
+
+      arm1.moveClawFront(input);
+
+      console.log("✅ Movimento concluído!");
+      // displayArmStatus();
+
+    } catch (error) {
+      console.log("❌ Erro:", error.message);
+    }
+  }
+}
+
+// Iniciar modo interativo
+startInteractiveMode().catch(console.error);
