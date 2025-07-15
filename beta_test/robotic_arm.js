@@ -163,11 +163,6 @@ class RoboticArm {
     this.uBC = [this.BC[0] / this.moduloBC, this.BC[1] / this.moduloBC];
     this.uAC = [this.AC[0] / this.moduloAC, this.AC[1] / this.moduloAC];
     this.uAD = [this.AD[0] / this.moduloAD, this.AD[1] / this.moduloAD];
-
-    //* Angulos representativos do Losando (Vértices A, B, C e D)
-    const shoulderAngleTest = calcAngleBasedClawDistance(this.segmentLength1, this.b)
-    console.log(`Angulo atualizado do shoulderAngle: ${shoulderAngleTest.toFixed(2)} para claw distance = ${this.b}`);
-
   }
 
   updateCoordinates(x, y, z = this.z, joint) {
@@ -224,6 +219,11 @@ class RoboticArm {
     return [x * cos - y * sin, x * sin - y * cos]
   }
 
+  // Formula ANtiga
+  // Calcular novos ângulos usando lei dos cossenos
+  // Para um braço de dois segmentos, calculamos os ângulos internos do triângulo
+  // Calculo com lei dos cossenos para achar novos angulos -> Ver mais informacoes na documentacao
+  // p = a √(2 - 2 cos(B))
   moveClawFront(distance) {
     console.log(`\nMovendo garra ${distance} unidades para frente...`);
     // Para mover para frente, deve-se alterar o valor da reta AC para o tamanho final do movimento
@@ -243,8 +243,20 @@ class RoboticArm {
     }
 
     const newAngleA = Math.acos(cosA) * 180 / Math.PI;
+    const newAngleB = 180 - newAngleA
+
+    // * Calcula a variação do angulo nos motores apos a mudança de posição
+    const angleDeltaA = newAngleA - this.A_angle
+    const angleDeltaB = newAngleB - this.B_angle
+    this.shoulderJoint.updateAngle(angleDeltaA);
+    this.elbowJoint.updateAngle(angleDeltaB)
+
+    //* Atualização dos angulos do Losango de acordo com a movimentação do braço
     this.A_angle = newAngleA;
-    console.log(`Old AC diagonal = ${this.b.toFixed(4)}`);
+    // B angle is complementary with A -> Losango laws
+    this.B_angle = newAngleB;
+    this.C_angle = this.A_angle
+    this.D_angle = this.B_angle
 
     // New Diagonal distance -> this.b
     this.b = newAC;
@@ -252,13 +264,6 @@ class RoboticArm {
     // Recalcula medidas
     const updatedHeight = this.calculateLosangoHeight();
     const updatedClaw = this.getClawDistance();
-
-    console.log(`Old claw distance = ${currentClaw.toFixed(4)}`);
-
-    console.log(`New AC diagonal = ${newAC.toFixed(4)}`);
-    console.log(`New internal angle A = ${newAngleA.toFixed(4)}°`);
-    console.log(`Updated height = ${updatedHeight.toFixed(4)}`);
-    console.log(`Updated claw distance = ${updatedClaw.toFixed(4)}`);
 
     // Verificar se o movimento é possível
     const maxReach = this.segmentLength1 + this.segmentLength2;
@@ -268,25 +273,6 @@ class RoboticArm {
       console.log(`Movimento impossível. Alcance deve estar entre ${minReach} e ${maxReach}`);
       return;
     }
-
-    // Calcular novos ângulos usando lei dos cossenos
-    // Para um braço de dois segmentos, calculamos os ângulos internos do triângulo
-    // Calculo com lei dos cossenos para achar novos angulos -> Ver mais informacoes na documentacao
-    // p = a √(2 - 2 cos(B))
-    //* Recalcula a angulação dos angulos internos do Losango para recalcular o angulo de cada Joint (motor)
-
-    // Ângulo no cotovelo (interno do losango)
-    const shoulderAngleDegrees = calcAngleBasedClawDistance(this.segmentLength1, updatedClaw)
-    // Ângulo no ombro (interno do losango)
-    const elbowAngleDegrees = calcAngleBasedClawDistance(this.segmentLength1, updatedClaw, true)
-
-    console.log(`Novo ângulo do vertice A (ombro): ${shoulderAngleDegrees.toFixed(2)}° para claw distance = ${updatedClaw}`);
-    console.log(`Novo ângulo do vertice B (cotovelo): ${elbowAngleDegrees.toFixed(2)}°`);
-
-    // * Calcula a variação do angulo apos a mudança de posição
-    //! Continuar daqui fazendo o calculo da variação do angulo apos o movimento, atualizando os angulos do braco (losango -> this.A_anlge etc...) e depois enviar a variação do angulo para cada Joint atualizar a posição e corresponder o movimento
-    const shoulderAngleVariation = this.A_angle - shoulderAngleDegrees
-    const elbowAngleVariation = this.B_angle - elbowAngleDegrees
 
     //* Rotaciona o segmento AB em relação a AD
     //* calcular AB girando AD em +angleA (padrão CCW).
