@@ -206,7 +206,7 @@ class RoboticArm {
   // Para um braço de dois segmentos, calculamos os ângulos internos do triângulo
   // Calculo com lei dos cossenos para achar novos angulos -> Ver mais informacoes na documentacao
   // p = a √(2 - 2 cos(B))
-  moveClawFront(distance) {
+  moveClawX(distance) {
     console.log(`\nMovendo garra ${distance} unidades para frente...`);
     // Para mover para frente, deve-se alterar o valor da reta AC para o tamanho final do movimento
     // Exemplo: mover garra dois cm para frente é resultado da trigonometria para calcular os angulos nas `Joints` Shoulder e Elbow]
@@ -316,72 +316,83 @@ class RoboticArm {
   }
 }
 
-const readline = require('readline');
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-function ask(prompt) {
-  return new Promise(res => rl.question(prompt, ans => res(parseFloat(ans))));
-}
-const arm1 = new RoboticArm(shoulder, elbow, claw);
+// * Comentado para poder realizar simulacao no html
+// const readline = require('readline');
+// const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+// function ask(prompt) {
+//   return new Promise(res => rl.question(prompt, ans => res(parseFloat(ans))));
+// }
+// Instância para uso no Node.js (comentado para uso no navegador)
+// const arm1 = new RoboticArm(shoulder, elbow, claw);
 
-function displayArmStatus() {
-  console.log("=".repeat(50));
-  console.log("📊 STATUS DO BRAÇO ROBÓTICO");
-  console.log("=".repeat(50));
+// Função para Node.js (comentada para uso no navegador)
+// function displayArmStatus() {
+//   console.log("=".repeat(50));
+//   console.log("STATUS DO BRAÇO ROBÓTICO");
+//   console.log("=".repeat(50));
 
-  console.log("\n🔧 ÂNGULOS Das Juntas:");
-  console.log(`  Ombro: ${arm1.A_angle.toFixed(2)}°`);
-  console.log(`  Cotovelo: ${arm1.B_angle.toFixed(2)}°`);
+//   console.log("\n🔧 ÂNGULOS Das Juntas:");
+//   console.log(`  Ombro: ${arm1.A_angle.toFixed(2)}°`);
+//   console.log(`  Cotovelo: ${arm1.B_angle.toFixed(2)}°`);
 
-  console.log("\n📏 COMPRIMENTOS:");
-  console.log(`  Lado a (BC): ${arm1.a.toFixed(2)}`);
-  console.log(`  Lado b (AC): ${arm1.b.toFixed(2)}`);
-  console.log(`  Lado c (AB): ${arm1.c.toFixed(2)}`);
+//   console.log("\nCOMPRIMENTOS:");
+//   console.log(`  Lado a (BC): ${arm1.a.toFixed(2)}`);
+//   console.log(`  Lado b (AC): ${arm1.b.toFixed(2)}`);
+//   console.log(`  Lado c (AB): ${arm1.c.toFixed(2)}`);
 
-  console.log(`Claw Distance: ${arm1.getClawDistance()}`);
+//   console.log(`Claw Distance: ${arm1.getClawDistance()}`);
   
 
-  console.log("\n📍 COORDENADAS:");
-  const coords = arm1.coordinates();
-  console.log(`  Ombro: (${coords.shoulder[0].toFixed(2)}, ${coords.shoulder[1].toFixed(2)})`);
-  console.log(`  Cotovelo: (${coords.elbow[0].toFixed(2)}, ${coords.elbow[1].toFixed(2)})`);
-  console.log(`  Garra: (${coords.claw[0].toFixed(2)}, ${coords.claw[1].toFixed(2)})`);
+//   console.log("\nCOORDENADAS:");
+//   const coords = arm1.coordinates();
+//   console.log(`  Ombro: (${coords.shoulder[0].toFixed(2)}, ${coords.shoulder[1].toFixed(2)})`);
+//   console.log(`  Cotovelo: (${coords.elbow[0].toFixed(2)}, ${coords.elbow[1].toFixed(2)})`);
+//   console.log(`  Garra: (${coords.claw[0].toFixed(2)}, ${coords.claw[1].toFixed(2)})`);
 
-  console.log("\n🧭 DIREÇÕES UNITÁRIAS:");
-  console.log(`  AB: (${arm1.uAB[0].toFixed(3)}, ${arm1.uAB[1].toFixed(3)})`);
-  console.log(`  BC: (${arm1.uBC[0].toFixed(3)}, ${arm1.uBC[1].toFixed(3)})`);
-  console.log(`  AC: (${arm1.uAC[0].toFixed(3)}, ${arm1.uAC[1].toFixed(3)})`);
+//   console.log("\nDIREÇÕES UNITÁRIAS:");
+//   console.log(`  AB: (${arm1.uAB[0].toFixed(3)}, ${arm1.uAB[1].toFixed(3)})`);
+//   console.log(`  BC: (${arm1.uBC[0].toFixed(3)}, ${arm1.uBC[1].toFixed(3)})`);
+//   console.log(`  AC: (${arm1.uAC[0].toFixed(3)}, ${arm1.uAC[1].toFixed(3)})`);
 
-  console.log("=".repeat(50));
+//   console.log("=".repeat(50));
+// }
+
+// async function startInteractiveMode() {
+//   console.log("CONTROLE INTERATIVO DO BRAÇO ROBÓTICO");
+//   console.log("Insira a distância para mover a garra (números positivos/negativos)");
+
+//   // Mostrar status inicial
+//   displayArmStatus();
+
+//   while (true) {
+//     try {
+//       const input = await ask("\nDigite a distância para mover a garra: ");
+
+//       if (isNaN(input)) {
+//         console.log("Por favor, insira um número válido.");
+//         continue;
+//       }
+
+//       console.log(`\nMovendo garra ${input > 0 ? input : input} unidades...`);
+
+//       arm1.moveClawX(input);
+
+//       console.log("Movimento concluído!");
+//       displayArmStatus();
+
+//     } catch (error) {
+//       console.log("Erro:", error.message);
+//     }
+//   }
+// }
+// startInteractiveMode().catch(console.error);
+
+// Disponibilizar classes e funções globalmente para uso no navegador
+if (typeof window !== 'undefined') {
+  window.Joint = Joint;
+  window.RoboticArm = RoboticArm;
+  window.lawOfCosines = lawOfCosines;
+  window.toRad = toRad;
+  window.toDeg = toDeg;
+  window.calcAngleBasedClawDistance = calcAngleBasedClawDistance;
 }
-
-async function startInteractiveMode() {
-  console.log("🤖 CONTROLE INTERATIVO DO BRAÇO ROBÓTICO");
-  console.log("Insira a distância para mover a garra (números positivos/negativos)");
-
-  // Mostrar status inicial
-  displayArmStatus();
-
-  while (true) {
-    try {
-      const input = await ask("\nDigite a distância para mover a garra: ");
-
-      if (isNaN(input)) {
-        console.log("Por favor, insira um número válido.");
-        continue;
-      }
-
-      console.log(`\nMovendo garra ${input > 0 ? input : input} unidades...`);
-
-      arm1.moveClawFront(input);
-
-      console.log("✅ Movimento concluído!");
-      displayArmStatus();
-
-    } catch (error) {
-      console.log("❌ Erro:", error.message);
-    }
-  }
-}
-
-// Iniciar modo interativo
-startInteractiveMode().catch(console.error);
