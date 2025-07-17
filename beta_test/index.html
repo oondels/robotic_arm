@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulação Interativa - Braço Robótico</title>
+    <style>
+        /* === ESTILOS GERAIS === */
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* === CONFIGURAÇÕES DO CANVAS === */
+        #canvas-container {
+            position: relative;
+            width: 100%;
+            height: 600px; /* Altura configurável aqui */
+            border: 3px solid #34495e;
+            border-radius: 10px;
+            overflow: hidden;
+            background: linear-gradient(45deg, #f8f9fa 25%, transparent 25%), 
+                        linear-gradient(-45deg, #f8f9fa 25%, transparent 25%), 
+                        linear-gradient(45deg, transparent 75%, #f8f9fa 75%), 
+                        linear-gradient(-45deg, transparent 75%, #f8f9fa 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+
+        #roboticCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            cursor: crosshair;
+        }
+
+        /* === CONTROLES DE SIMULAÇÃO === */
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
+            background: #ecf0f1;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        label {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 0.9em;
+        }
+
+        input[type="range"] {
+            width: 150px;
+            height: 5px;
+            border-radius: 5px;
+            background: #bdc3c7;
+            outline: none;
+        }
+
+        input[type="number"] {
+            width: 80px;
+            padding: 8px;
+            border: 2px solid #bdc3c7;
+            border-radius: 5px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #2980b9;
+        }
+
+        /* === STATUS DO BRAÇO === */
+        .status-panel {
+            margin-top: 20px;
+            padding: 15px;
+            background: #2c3e50;
+            color: white;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .status-item {
+            background: #34495e;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #3498db;
+        }
+
+        /* === RESPONSIVIDADE === */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            h1 {
+                font-size: 2em;
+            }
+            
+            #canvas-container {
+                height: 400px;
+            }
+            
+            .controls {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Simulação Interativa - Braço Robótico</h1>
+        
+        <!-- Canvas Principal -->
+        <div id="canvas-container">
+            <canvas id="roboticCanvas"></canvas>
+        </div>
+
+        <!-- Controle Simulação -->
+        <div class="controls">
+            <div class="control-group">
+                <label for="clawDistance">Distância da Garra</label>
+                <input type="range" id="clawDistance" min="0" max="20" step="0.5" value="10">
+                <span id="clawDistanceValue">10</span>
+            </div>
+            
+            <div class="control-group">
+                <label for="moveInput">Mover Garra (X)</label>
+                <input type="number" id="moveInput" step="0.5" placeholder="0.0">
+                <button onclick="moveClawByInput()">Mover</button>
+            </div>
+            
+            <div class="control-group">
+                <label>Controles Rápidos</label>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="moveClaw(-1)">← -1</button>
+                    <button onclick="moveClaw(1)">+1 →</button>
+                    <button onclick="resetArm()">Reset</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status -->
+        <div class="status-panel">
+            <h3>📊 Status do Braço Robótico</h3>
+            <div class="status-grid" id="statusGrid">
+            </div>
+        </div>
+    </div>
+
+    <script src="./robotic_arm.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Verificar se as classes foram carregadas
+            if (typeof Joint !== 'undefined' && typeof RoboticArm !== 'undefined') {
+                initializeSimulation();
+            } else {
+                console.error('Erro: Classes não foram carregadas do robotic_arm.js');
+                alert('Erro: Não foi possível carregar o módulo robotic_arm.js');
+            }
+        });
+
+        let canvas, ctx;
+        let roboticArm;
+        let animationId;
+        const VISUAL_CONFIG = {
+            // Cores do losango e elementos
+            RHOMBUS_COLOR: '#e74c3c',           
+            RHOMBUS_STROKE: '#c0392b',        
+            JOINT_COLOR: '#f39c12',            
+            SEGMENT_COLOR: '#3498db',          
+            GRID_COLOR: '#bdc3c7',           
+            
+            RHOMBUS_LINE_WIDTH: 3,              
+            SEGMENT_LINE_WIDTH: 4,          
+            GRID_LINE_WIDTH: 1,               
+            
+            // Tamanhos de elementos
+            JOINT_RADIUS: 6,                    // Raio dos círculos das juntas
+            SCALE_FACTOR: 15,                   // Fator de escala geral (ajusta tamanho)
+            
+            // Configurações da grade
+            GRID_SIZE: 20,                      
+            SHOW_GRID: true,                    
+            
+            // Offset para centralizar o desenho
+            OFFSET_X: 0,                        // Deslocamento horizontal
+            OFFSET_Y: 0                         // Deslocamento vertical
+        };
+
+        function initializeSimulation() {
+            console.log('Inicializando simulação do braço robótico...');
+            
+            setupCanvas();
+            
+            initializeRoboticArm();
+            
+            setupEventListeners();
+            
+            startAnimationLoop();
+            console.log('Simulação inicializada com sucesso!');
+        }
+
+        // Canvas
+        function setupCanvas() {
+            canvas = document.getElementById('roboticCanvas');
+            ctx = canvas.getContext('2d');
+            
+            resizeCanvas();
+            
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.imageSmoothingEnabled = true;
+        }
+
+        function resizeCanvas() {
+            const container = document.getElementById('canvas-container');
+            const rect = container.getBoundingClientRect();
+            
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            
+            VISUAL_CONFIG.OFFSET_X = canvas.width / 2;
+            VISUAL_CONFIG.OFFSET_Y = canvas.height / 2;
+        }
+
+        function initializeRoboticArm() {
+            const shoulder = new Joint("shoulder", 0, 0, 0, 50, false);
+            const elbow = new Joint("elbow", 0, 10, 0, 90);
+            const claw = new Joint("claw", 10, 10, 0, 45);
+            
+            roboticArm = new RoboticArm(shoulder, elbow, claw);
+            
+            updateStatusPanel();
+        }
+
+        // Inicio da animacao
+        function startAnimationLoop() {
+            function animate() {
+                clearCanvas();
+                
+                if (VISUAL_CONFIG.SHOW_GRID) {
+                    drawGrid();
+                }
+                roboticArm.updateArmGeometry();
+                drawRoboticArm();
+                drawInfo();
+
+                animationId = requestAnimationFrame(animate);
+            }
+            
+            animate();
+        }
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function drawGrid() {
+            ctx.strokeStyle = VISUAL_CONFIG.GRID_COLOR;
+            ctx.lineWidth = VISUAL_CONFIG.GRID_LINE_WIDTH;
+            ctx.globalAlpha = 0.3;
+            
+            const gridSize = VISUAL_CONFIG.GRID_SIZE;
+            
+            for (let x = 0; x <= canvas.width; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            
+            for (let y = 0; y <= canvas.height; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+            
+            ctx.globalAlpha = 1;
+        }
+
+        function drawRoboticArm() {
+            const coords = roboticArm.coordinates();
+            const shoulder = coords.shoulder;
+            const elbow = coords.elbow;
+            const claw = coords.claw;
+            
+            const shoulderPx = worldToCanvas(shoulder[0], shoulder[1]);
+            const elbowPx = worldToCanvas(elbow[0], elbow[1]);
+            const clawPx = worldToCanvas(claw[0], claw[1]);
+            
+            // segmentos do braço
+            drawSegment(shoulderPx, elbowPx, 'Ombro-Cotovelo');
+            drawSegment(elbowPx, clawPx, 'Cotovelo-Garra');
+            
+            // Desenhar losango (baseado nos pontos A, B, C, D do robotic arm)
+            drawRhombus();
+            
+            drawJoint(shoulderPx, 'Ombro', '#e67e22');
+            drawJoint(elbowPx, 'Cotovelo', VISUAL_CONFIG.JOINT_COLOR);
+            drawJoint(clawPx, 'Garra', '#27ae60');
+            
+            const dPoint = worldToCanvas(roboticArm.D[0], roboticArm.D[1]);
+            drawJoint(dPoint, 'Ref D', '#9b59b6');
+        }
+
+        function drawSegment(point1, point2, label) {
+            ctx.strokeStyle = VISUAL_CONFIG.SEGMENT_COLOR;
+            ctx.lineWidth = VISUAL_CONFIG.SEGMENT_LINE_WIDTH;
+            
+            ctx.beginPath();
+            ctx.moveTo(point1.x, point1.y);
+            ctx.lineTo(point2.x, point2.y);
+            ctx.stroke();
+            
+            const midX = (point1.x + point2.x) / 2;
+            const midY = (point1.y + point2.y) / 2;
+            
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(label, midX, midY - 10);
+        }
+
+        function drawRhombus() {
+            const A = worldToCanvas(roboticArm.A[0], roboticArm.A[1]);
+            const B = worldToCanvas(roboticArm.B[0], roboticArm.B[1]);
+            const C = worldToCanvas(roboticArm.C[0], roboticArm.C[1]);
+            const D = worldToCanvas(roboticArm.D[0], roboticArm.D[1]);
+            
+            // Desenhar o losango
+            ctx.strokeStyle = VISUAL_CONFIG.RHOMBUS_STROKE;
+            ctx.fillStyle = VISUAL_CONFIG.RHOMBUS_COLOR + '40';
+            ctx.lineWidth = VISUAL_CONFIG.RHOMBUS_LINE_WIDTH;
+            
+            ctx.beginPath();
+            ctx.moveTo(A.x, A.y);
+            ctx.lineTo(B.x, B.y);
+            ctx.lineTo(C.x, C.y);
+            ctx.lineTo(D.x, D.y);
+            ctx.closePath();
+            
+            ctx.fill();
+            ctx.stroke();
+            
+            // Desenhar diagonais do losango
+            ctx.strokeStyle = VISUAL_CONFIG.RHOMBUS_STROKE + '80';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            
+            // Diagonal AC
+            ctx.beginPath();
+            ctx.moveTo(A.x, A.y);
+            ctx.lineTo(C.x, C.y);
+            ctx.stroke();
+            
+            // Diagonal BD
+            ctx.beginPath();
+            ctx.moveTo(B.x, B.y);
+            ctx.lineTo(D.x, D.y);
+            ctx.stroke();
+            
+            ctx.setLineDash([]); // Reset linha tracejada
+        }
+
+        function drawJoint(point, label, color = VISUAL_CONFIG.JOINT_COLOR) {
+            ctx.fillStyle = color;
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 2;
+            
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, VISUAL_CONFIG.JOINT_RADIUS, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.stroke();
+            
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(label, point.x, point.y - 15);
+        }
+
+        function drawInfo() {
+            // Desenhar informações no canto superior esquerdo
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(10, 10, 250, 100);
+            
+            ctx.fillStyle = 'white';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'left';
+            
+            const info = [
+                `Distância da Garra: ${roboticArm.getClawDistance().toFixed(2)}`,
+                `Altura do Losango: ${roboticArm.calculateLosangoHeight().toFixed(2)}`,
+                `Ângulo A: ${roboticArm.A_angle.toFixed(1)}°`,
+                `Ângulo B: ${roboticArm.B_angle.toFixed(1)}°`,
+                `Diagonal AC: ${roboticArm.b.toFixed(2)}`
+            ];
+            
+            info.forEach((text, index) => {
+                ctx.fillText(text, 20, 35 + index * 16);
+            });
+        }
+
+        // Conversão de coordenadas
+        function worldToCanvas(worldX, worldY) {
+            return {
+                x: VISUAL_CONFIG.OFFSET_X + worldX * VISUAL_CONFIG.SCALE_FACTOR,
+                y: VISUAL_CONFIG.OFFSET_Y - worldY * VISUAL_CONFIG.SCALE_FACTOR // Inverter Y
+            };
+        }
+
+        function canvasToWorld(canvasX, canvasY) {
+            return {
+                x: (canvasX - VISUAL_CONFIG.OFFSET_X) / VISUAL_CONFIG.SCALE_FACTOR,
+                y: -(canvasY - VISUAL_CONFIG.OFFSET_Y) / VISUAL_CONFIG.SCALE_FACTOR // Inverter Y
+            };
+        }
+
+        function setupEventListeners() {
+            window.addEventListener('resize', () => {
+                resizeCanvas();
+            });
+            
+            // Controle do slider de distância da garra
+            const clawDistanceSlider = document.getElementById('clawDistance');
+            const clawDistanceValue = document.getElementById('clawDistanceValue');
+            
+            clawDistanceSlider.addEventListener('input', (e) => {
+                const targetDistance = parseFloat(e.target.value);
+                clawDistanceValue.textContent = targetDistance;
+                
+                // Calcular movimento necessário
+                const currentDistance = roboticArm.getClawDistance();
+                const moveDistance = targetDistance - currentDistance;
+                
+                if (Math.abs(moveDistance) > 0.1) {
+                    try {
+                        roboticArm.moveClawX(moveDistance);
+                        updateStatusPanel();
+                    } catch (error) {
+                        console.warn('Movimento não possível:', error.message);
+                    }
+                }
+            });
+            
+            // Clique no canvas para mover garra
+            canvas.addEventListener('click', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const canvasX = e.clientX - rect.left;
+                const canvasY = e.clientY - rect.top;
+                
+                const worldCoords = canvasToWorld(canvasX, canvasY);
+                const targetDistance = worldCoords.x;
+                
+                const currentDistance = roboticArm.getClawDistance();
+                const moveDistance = targetDistance - currentDistance;
+                
+                try {
+                    roboticArm.moveClawX(moveDistance);
+                    updateStatusPanel();
+                    
+                    // Atualizar slider
+                    clawDistanceSlider.value = roboticArm.getClawDistance();
+                    clawDistanceValue.textContent = roboticArm.getClawDistance().toFixed(1);
+                } catch (error) {
+                    console.warn('Movimento não possível:', error.message);
+                }
+            });
+        }
+
+        // Funcoes de controle
+        window.moveClaw = function(distance) {
+            try {
+                roboticArm.moveClawX(distance);
+                updateStatusPanel();
+                
+                // Atualizar slider
+                const slider = document.getElementById('clawDistance');
+                const value = document.getElementById('clawDistanceValue');
+                slider.value = roboticArm.getClawDistance();
+                value.textContent = roboticArm.getClawDistance().toFixed(1);
+            } catch (error) {
+                alert('Movimento não possível: ' + error.message);
+            }
+        };
+
+        window.moveClawByInput = function() {
+            const input = document.getElementById('moveInput');
+            const distance = parseFloat(input.value);
+            
+            if (!isNaN(distance)) {
+                moveClaw(distance);
+                input.value = '';
+            }
+        };
+
+        window.resetArm = function() {
+            // Reinicializar o braço
+            initializeRoboticArm();
+            
+            // Resetar controles
+            const slider = document.getElementById('clawDistance');
+            const value = document.getElementById('clawDistanceValue');
+            slider.value = roboticArm.getClawDistance();
+            value.textContent = roboticArm.getClawDistance().toFixed(1);
+        };
+
+        // Atualização do painel de status
+        function updateStatusPanel() {
+            const statusGrid = document.getElementById('statusGrid');
+            const coords = roboticArm.coordinates();
+            
+            statusGrid.innerHTML = `
+                <div class="status-item">
+                    <strong>Ângulos das Juntas:</strong><br>
+                    Ombro: ${roboticArm.A_angle.toFixed(2)}°<br>
+                    Cotovelo: ${roboticArm.B_angle.toFixed(2)}°
+                </div>
+                <div class="status-item">
+                    <strong>Comprimentos:</strong><br>
+                    Lado a (BC): ${roboticArm.a.toFixed(2)}<br>
+                    Lado b (AC): ${roboticArm.b.toFixed(2)}<br>
+                    Lado c (AB): ${roboticArm.c.toFixed(2)}
+                </div>
+                <div class="status-item">
+                    <strong>Coordenadas:</strong><br>
+                    Ombro: (${coords.shoulder[0].toFixed(2)}, ${coords.shoulder[1].toFixed(2)})<br>
+                    Cotovelo: (${coords.elbow[0].toFixed(2)}, ${coords.elbow[1].toFixed(2)})<br>
+                    Garra: (${coords.claw[0].toFixed(2)}, ${coords.claw[1].toFixed(2)})
+                </div>
+                <div class="status-item">
+                    <strong>Métricas:</strong><br>
+                    Distância da Garra: ${roboticArm.getClawDistance().toFixed(2)}<br>
+                    Altura do Losango: ${roboticArm.calculateLosangoHeight().toFixed(2)}<br>
+                    Diagonal AC: ${roboticArm.b.toFixed(2)}
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
